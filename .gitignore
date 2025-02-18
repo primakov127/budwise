@@ -21,6 +21,9 @@
 **/.idea/**/contentModel.xml
 **/.idea/**/modules.xml
 
+#Project subfolder
+**/.idea/.idea.Budwise
+
 *.suo
 *.user
 .vs/
