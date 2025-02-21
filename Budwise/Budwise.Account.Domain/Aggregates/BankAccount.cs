@@ -13,9 +13,13 @@ namespace Budwise.Account.Domain.Aggregates
         
         private readonly List<Transaction> _transactions;
 
-        private BankAccount() { }
+        private BankAccount()
+        {
+            Balance = 0;
+            _transactions = [];
+        }
         
-        public BankAccount(Guid accountId, List<Guid> ownerIds)
+        public BankAccount(Guid accountId, List<Guid> ownerIds) : this()
         {
             if (accountId == Guid.Empty)
             {
@@ -34,8 +38,6 @@ namespace Budwise.Account.Domain.Aggregates
             
             AccountId = accountId;
             OwnerIds = ownerIds;
-            Balance = 0;
-            _transactions = [];
         }
         
         public Result Deposit(decimal amount, string? note) =>
