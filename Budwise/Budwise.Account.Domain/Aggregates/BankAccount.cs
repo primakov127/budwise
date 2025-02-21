@@ -13,6 +13,8 @@ namespace Budwise.Account.Domain.Aggregates
         
         private readonly List<Transaction> _transactions;
 
+        private BankAccount() { }
+        
         public BankAccount(Guid accountId, List<Guid> ownerIds)
         {
             if (accountId == Guid.Empty)

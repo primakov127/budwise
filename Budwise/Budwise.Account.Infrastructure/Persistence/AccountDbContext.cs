@@ -14,6 +14,13 @@ public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbCo
         modelBuilder.Entity<BankAccount>()
             .HasKey(a => a.AccountId);
 
+        modelBuilder.Entity<BankAccount>()
+            .HasMany(a => a.Transactions)
+            .WithOne()
+            .HasForeignKey(t => t.AccountId)
+            .HasField("_transactions")
+            .UsePropertyAccessMode(PropertyAccessMode.PreferFieldDuringConstruction);
+
         modelBuilder.Entity<Transaction>()
             .HasKey(t => t.TransactionId);
     }
