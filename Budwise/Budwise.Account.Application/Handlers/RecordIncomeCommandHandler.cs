@@ -12,7 +12,7 @@ public class RecordIncomeCommandHandler(AccountDbContext context, AccountEventsP
 {
     public async Task<Result> Handle(RecordIncomeCommand command)
     {
-        var account = await context.BankAccounts.FirstOrDefaultAsync(a => a.AccountId == command.AccountId);
+        var account = await context.AssetAccounts.FirstOrDefaultAsync(a => a.AccountId == command.AccountId);
         if (account is null)
         {
             return Result.Failure(ErrorMessage.FromCode(ErrorCode.AccountNotFound));

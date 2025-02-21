@@ -12,7 +12,7 @@ public static class ErrorMessage
         
         { ErrorCode.InvalidAmount, "Amount must be greater than zero." },
         { ErrorCode.InsufficientFunds, "Insufficient funds for this transaction." },
-        { ErrorCode.AccountNotFound, "The specified bank account could not be found." }
+        { ErrorCode.AccountNotFound, "The specified asset account could not be found." }
     };
 
     public static string FromCode(ErrorCode code) => Messages.GetValueOrDefault(code, DefaultMessage);

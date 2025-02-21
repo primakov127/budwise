@@ -5,13 +5,13 @@ using Xunit;
 
 namespace Budwise.Account.Tests.Domain;
 
-public class BankAccountTests
+public class AssetAccountTests
 {
     [Fact]
     public void Constructor_ShouldInitializeAccount_WithZeroBalanceAndEmptyTransactions()
     {
         var ownerIds = new List<Guid> { Guid.NewGuid() };
-        var account = new BankAccount(Guid.NewGuid(), ownerIds);
+        var account = new AssetAccount(Guid.NewGuid(), ownerIds);
 
         Assert.Equal(0, account.Balance);
         Assert.NotNull(account.Transactions);
@@ -22,27 +22,27 @@ public class BankAccountTests
     [Fact]
     public void Constructor_ShouldThrowException_WhenOwnerIdsIsNullOrEmpty()
     {
-        Assert.Throws<ArgumentException>(() => new BankAccount(Guid.NewGuid(), null!));
-        Assert.Throws<ArgumentException>(() => new BankAccount(Guid.NewGuid(), []));
+        Assert.Throws<ArgumentException>(() => new AssetAccount(Guid.NewGuid(), null!));
+        Assert.Throws<ArgumentException>(() => new AssetAccount(Guid.NewGuid(), []));
     }
 
     [Fact]
     public void Constructor_ShouldThrowException_WhenAccountIdIsEmpty()
     {
-        Assert.Throws<ArgumentException>(() => new BankAccount(Guid.Empty, [Guid.NewGuid()]));
+        Assert.Throws<ArgumentException>(() => new AssetAccount(Guid.Empty, [Guid.NewGuid()]));
     }
 
     [Fact]
     public void Constructor_ShouldThrowException_WhenOwnerIdsContainEmptyGuid()
     {
         var ownerIds = new List<Guid> { Guid.NewGuid(), Guid.Empty };
-        Assert.Throws<ArgumentException>(() => new BankAccount(Guid.NewGuid(), ownerIds));
+        Assert.Throws<ArgumentException>(() => new AssetAccount(Guid.NewGuid(), ownerIds));
     }
 
     [Fact]
     public void Deposit_ShouldIncreaseBalanceAndAddTransaction_WhenAmountIsValid()
     {
-        var account = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var account = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         var result = account.Deposit(100m, "Initial deposit");
 
         Assert.True(result.IsSuccess);
@@ -54,7 +54,7 @@ public class BankAccountTests
     [Fact]
     public void Deposit_ShouldFail_WhenAmountIsZeroOrNegative()
     {
-        var account = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var account = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         var result = account.Deposit(0m, "Invalid deposit");
 
         Assert.True(result.IsFailure);
@@ -64,7 +64,7 @@ public class BankAccountTests
     [Fact]
     public void Withdraw_ShouldDecreaseBalanceAndAddTransaction_WhenSufficientFunds()
     {
-        var account = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var account = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         account.Deposit(200m, "Initial deposit");
         var result = account.Withdraw(50m, "ATM withdrawal");
 
@@ -77,7 +77,7 @@ public class BankAccountTests
     [Fact]
     public void Withdraw_ShouldFail_WhenInsufficientFunds()
     {
-        var account = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var account = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         var result = account.Withdraw(50m, "Attempted withdrawal");
 
         Assert.True(result.IsFailure);
@@ -87,7 +87,7 @@ public class BankAccountTests
     [Fact]
     public void Withdraw_ShouldFail_WhenAmountIsZeroOrNegative()
     {
-        var account = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var account = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         var result = account.Withdraw(-10m, "Invalid withdrawal");
 
         Assert.True(result.IsFailure);
@@ -97,8 +97,8 @@ public class BankAccountTests
     [Fact]
     public void Transfer_ShouldMoveFunds_WhenBothAccountsAreValid()
     {
-        var sourceAccount = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
-        var destinationAccount = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var sourceAccount = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var destinationAccount = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         sourceAccount.Deposit(300m, "Funding source account");
 
         var result = sourceAccount.Transfer(100m, destinationAccount);
@@ -113,8 +113,8 @@ public class BankAccountTests
     [Fact]
     public void Transfer_ShouldFail_WhenInsufficientFunds()
     {
-        var sourceAccount = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
-        var destinationAccount = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var sourceAccount = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var destinationAccount = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
 
         var result = sourceAccount.Transfer(100m, destinationAccount);
 
@@ -125,7 +125,7 @@ public class BankAccountTests
     [Fact]
     public void Transfer_ShouldFail_WhenDestinationAccountIsNull()
     {
-        var sourceAccount = new BankAccount(Guid.NewGuid(), [Guid.NewGuid()]);
+        var sourceAccount = new AssetAccount(Guid.NewGuid(), [Guid.NewGuid()]);
         sourceAccount.Deposit(100m, "Funding source account");
 
         var result = sourceAccount.Transfer(50m, null);

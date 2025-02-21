@@ -4,7 +4,7 @@ using Budwise.Account.Domain.Errors;
 
 namespace Budwise.Account.Domain.Aggregates
 {
-    public class BankAccount
+    public class AssetAccount
     {
         public Guid AccountId { get; private set; }
         public decimal Balance { get; private set; }
@@ -13,13 +13,13 @@ namespace Budwise.Account.Domain.Aggregates
         
         private readonly List<Transaction> _transactions;
 
-        private BankAccount()
+        private AssetAccount()
         {
             Balance = 0;
             _transactions = [];
         }
         
-        public BankAccount(Guid accountId, List<Guid> ownerIds) : this()
+        public AssetAccount(Guid accountId, List<Guid> ownerIds) : this()
         {
             if (accountId == Guid.Empty)
             {
@@ -51,7 +51,7 @@ namespace Budwise.Account.Domain.Aggregates
                 .Tap(() => Balance -= amount)
                 .Tap(() => AddTransaction(amount, TransactionType.Credit, note));
         
-        public Result Transfer(decimal amount, BankAccount? destinationAccount) =>
+        public Result Transfer(decimal amount, AssetAccount? destinationAccount) =>
             ValidateDestinationAccount(destinationAccount)
                 .Bind(() => Withdraw(amount, $"Transfer to account {destinationAccount!.AccountId}"))
                 .Bind(() => destinationAccount!.Deposit(amount, $"Transfer from account {AccountId}"));
@@ -76,7 +76,7 @@ namespace Budwise.Account.Domain.Aggregates
                 ? Result.Success() 
                 : Result.Failure(ErrorMessage.FromCode(ErrorCode.InsufficientFunds));
 
-        private static Result ValidateDestinationAccount(BankAccount? account) =>
+        private static Result ValidateDestinationAccount(AssetAccount? account) =>
             account is not null 
                 ? Result.Success() 
                 : Result.Failure(ErrorMessage.FromCode(ErrorCode.AccountNotFound));

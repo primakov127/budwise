@@ -6,12 +6,12 @@ namespace Budwise.Account.Infrastructure.Persistence;
 
 public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbContext(options)
 {
-    public DbSet<BankAccount> BankAccounts { get; set; }
+    public DbSet<AssetAccount> AssetAccounts { get; set; }
     public DbSet<Transaction> Transactions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BankAccount>(entity =>
+        modelBuilder.Entity<AssetAccount>(entity =>
         {
             entity.HasKey(a => a.AccountId);
             entity.Property(a => a.AccountId)

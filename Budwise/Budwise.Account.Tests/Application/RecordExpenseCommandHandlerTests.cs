@@ -54,9 +54,9 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
         var ownerIds = new List<Guid> { Guid.NewGuid() };
         var command = new RecordExpenseCommand(accountId, 50m, "Test expense");
 
-        var newAccount = new BankAccount(accountId, ownerIds);
+        var newAccount = new AssetAccount(accountId, ownerIds);
         newAccount.Deposit(100m, "Initial deposit");
-        _context.BankAccounts.Add(newAccount);
+        _context.AssetAccounts.Add(newAccount);
         await _context.SaveChangesAsync();
 
         // Act
@@ -65,7 +65,7 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
         // Assert
         Assert.True(result.IsSuccess);
 
-        var account = await _context.BankAccounts
+        var account = await _context.AssetAccounts
             .Include(a => a.Transactions)
             .FirstOrDefaultAsync(a => a.AccountId == accountId);
         
