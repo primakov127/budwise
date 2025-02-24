@@ -1,6 +1,7 @@
 ﻿using CSharpFunctionalExtensions;
 using Budwise.Account.Domain.Entities;
 using Budwise.Account.Domain.Errors;
+using CSharpFunctionalExtensions.ValueTasks;
 
 namespace Budwise.Account.Domain.Aggregates
 {
@@ -10,6 +11,7 @@ namespace Budwise.Account.Domain.Aggregates
         public decimal Balance { get; private set; }
         public IReadOnlyList<Guid> OwnerIds { get; private set; }
         public IReadOnlyList<Transaction> Transactions => _transactions.AsReadOnly();
+        public byte[] Version { get; private set; }
         
         private readonly List<Transaction> _transactions;
 
@@ -17,6 +19,8 @@ namespace Budwise.Account.Domain.Aggregates
         {
             Balance = 0;
             _transactions = [];
+            
+            UpdateVersion();
         }
         
         public AssetAccount(Guid accountId, List<Guid> ownerIds) : this()
@@ -43,14 +47,16 @@ namespace Budwise.Account.Domain.Aggregates
         public Result Deposit(decimal amount, string? note) =>
             ValidateAmount(amount)
                 .Tap(() => Balance += amount)
-                .Tap(() => AddTransaction(amount, TransactionType.Debit, note));
+                .Tap(() => AddTransaction(amount, TransactionType.Debit, note))
+                .Tap(UpdateVersion);
             
         public Result Withdraw(decimal amount, string? note) =>
             ValidateAmount(amount)
                 .Bind(() => EnsureSufficientFunds(amount))
                 .Tap(() => Balance -= amount)
-                .Tap(() => AddTransaction(amount, TransactionType.Credit, note));
-        
+                .Tap(() => AddTransaction(amount, TransactionType.Credit, note))
+                .Tap(UpdateVersion);
+
         public Result Transfer(decimal amount, AssetAccount? destinationAccount) =>
             ValidateDestinationAccount(destinationAccount)
                 .Bind(() => Withdraw(amount, $"Transfer to account {destinationAccount!.AccountId}"))
@@ -65,6 +71,11 @@ namespace Budwise.Account.Domain.Aggregates
                 type,
                 note)
             );
+        
+        private void UpdateVersion()
+        {
+            Version = Guid.NewGuid().ToByteArray();
+        }
         
         private static Result ValidateAmount(decimal amount) =>
             amount > 0 

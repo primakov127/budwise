@@ -38,6 +38,10 @@ public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbCo
             entity.Navigation(a => a.Transactions)
                 .HasField("_transactions")
                 .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+            entity.Property(a => a.Version)
+                .IsConcurrencyToken();
+            // .ValueGeneratedOnAddOrUpdate();
         });
 
         modelBuilder.Entity<Transaction>(entity =>

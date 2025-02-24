@@ -9,8 +9,10 @@ using Budwise.Account.Infrastructure.Persistence;
 using CSharpFunctionalExtensions;
 using MassTransit;
 using MassTransit.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using TestSupport.EfHelpers;
 using Xunit;
 
 namespace Budwise.Account.Tests.Application;
@@ -26,14 +28,22 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
     public RecordExpenseCommandHandlerTests()
     {
         var services = new ServiceCollection();
-        services.AddDbContext<AccountDbContext>(options => options.UseInMemoryDatabase("TestDatabase"));
+        // Register the DbContext to use the SQLite connection provided by EFCore.TestSupport.
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        services.AddDbContext<AccountDbContext>(options => options.UseSqlite(connection));
+
         services.AddMassTransitTestHarness();
         services.AddScoped<AccountEventsPublisher>();
         services.AddScoped<RecordExpenseCommandHandler>();
 
         _serviceProvider = services.BuildServiceProvider();
         _scope = _serviceProvider.CreateScope();
+
         _context = _scope.ServiceProvider.GetRequiredService<AccountDbContext>();
+        // Ensure the database schema is created.
+        _context.Database.EnsureCreated();
+
         _handler = _scope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
         _harness = _scope.ServiceProvider.GetRequiredService<ITestHarness>();
     }
