@@ -15,16 +15,13 @@ public class RecordExpenseCommandHandler(IDbContextFactory<AccountDbContext> con
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<DbUpdateConcurrencyException>()
         .RetryAsync(3);
-    
-    public async Task<Result> Handle(RecordExpenseCommand command)
-    {
-        return await RetryPolicy
-            .ExecuteAsync(async () => await ProcessWithdrawal(command))
-            .Tap(async () => await publisher.PublishMoneyWithdrawn(
-                new MoneyWithdrawn(command.AccountId, command.Amount))
-            );
-    }
-    
+
+    public Task<Result> Handle(RecordExpenseCommand command) => RetryPolicy
+        .ExecuteAsync(async () => await ProcessWithdrawal(command))
+        .Tap(async () => await publisher.PublishMoneyWithdrawn(
+            new MoneyWithdrawn(command.AccountId, command.Amount))
+        );
+
     private async Task<Result> ProcessWithdrawal(RecordExpenseCommand command)
     {
         await using var context = await contextFactory.CreateDbContextAsync();
