@@ -41,7 +41,6 @@ public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbCo
 
             entity.Property(a => a.Version)
                 .IsConcurrencyToken();
-            // .ValueGeneratedOnAddOrUpdate();
         });
 
         modelBuilder.Entity<Transaction>(entity =>

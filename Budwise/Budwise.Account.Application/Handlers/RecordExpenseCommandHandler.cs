@@ -14,7 +14,12 @@ public class RecordExpenseCommandHandler(AccountDbContext context, AccountEvents
 {
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<DbUpdateConcurrencyException>()
-        .RetryAsync(3);
+        .WaitAndRetryAsync(new[]
+        {
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(3)
+        });
     
     public async Task<Result> Handle(RecordExpenseCommand command)
     {
