@@ -55,6 +55,7 @@ public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbCo
             
             entity.Property(t => t.Date)
                 .IsRequired();
+            entity.HasIndex(t => t.Date);
             
             entity.Property(t => t.Type)
                 .IsRequired()

@@ -27,7 +27,7 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
     {
         var services = new ServiceCollection();
         // Register the DbContext to use the SQLite connection provided by EFCore.TestSupport.
-        services.AddDbContext<AccountDbContext>(options => options.UseNpgsql("Host=localhost;Database=testdb;Username=testuser;Password=testpassword"));
+        services.AddDbContextFactory<AccountDbContext>(options => options.UseNpgsql("Host=localhost;Database=testdb;Username=testuser;Password=testpassword"));
 
         services.AddMassTransitTestHarness();
         services.AddScoped<AccountEventsPublisher>();
@@ -75,13 +75,14 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
         Assert.True(result.IsSuccess);
 
         var account = await _context.AssetAccounts
+            .AsNoTracking() // To force a fresh read from the database.
             .Include(a => a.Transactions)
             .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
         Assert.NotNull(account);
         Assert.Equal(50m, account.Balance);
         Assert.Equal(2, account.Transactions.Count);
-        Assert.Equal(TransactionType.Credit, account.Transactions[1].Type);
+        Assert.Equal(TransactionType.Credit, account.Transactions.OrderBy(t => t.Date).ElementAt(1).Type);
 
         Assert.True(await _harness.Published.Any<MoneyWithdrawn>());
     }
@@ -194,6 +195,7 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
         Assert.True(result2.IsSuccess);
 
         var account = await _context.AssetAccounts
+            .AsNoTracking() // To force a fresh read from the database.
             .Include(a => a.Transactions)
             .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
@@ -217,8 +219,7 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
         var ownerIds = new List<Guid> { Guid.NewGuid() };
         var initialDeposit = 100m;
         var expenseAmount = 30m;
-        var numConcurrentTransactions =
-            5; // Maximum total withdrawal if all succeed would be 150, which exceeds the deposit.
+        var numConcurrentTransactions = 5; // Maximum total withdrawal if all succeed would be 150, which exceeds the deposit.
 
         // Create account with an initial deposit.
         var newAccount = new AssetAccount(accountId, ownerIds);
@@ -244,10 +245,14 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
 
         var results = await Task.WhenAll(tasks);
 
-        // Count how many transactions were successful.
-        int successfulTransactions = results.Count(r => r.IsSuccess);
+        // we expect 3 credit transactions 30 * 3 = 90 since the balance is 100
+        var expectedSuccessfulTransactionsCount = 3;
 
         // Assert
+        var failedTransactions = results.Where(r => r.IsFailure).ToList();
+        Assert.Equal(results.Length - expectedSuccessfulTransactionsCount, failedTransactions.Count);
+        Assert.All(failedTransactions, result => Assert.Equal(ErrorMessage.FromCode(ErrorCode.InsufficientFunds), result.Error));
+        
         // Reload the account from the database using a fresh scope.
         using (var scope = _serviceProvider.CreateScope())
         {
@@ -258,17 +263,17 @@ public class RecordExpenseCommandHandlerTests : IAsyncLifetime
             Assert.NotNull(account);
 
             // The expected final balance is the initial deposit minus the sum of successful withdrawals.
-            var expectedBalance = initialDeposit - (successfulTransactions * expenseAmount);
+            var expectedBalance = initialDeposit - (expectedSuccessfulTransactionsCount * expenseAmount);
             Assert.Equal(expectedBalance, account.Balance);
 
             // The account should have one deposit plus one transaction per successful expense.
-            Assert.Equal(1 + successfulTransactions, account.Transactions.Count);
+            Assert.Equal(1 + expectedSuccessfulTransactionsCount, account.Transactions.Count);
         }
 
         // Optionally, verify that the number of MoneyWithdrawn events published equals the successful transactions.
         // Note: Depending on your DI setup, the harness might be different in separate scopes.
         // For simplicity, we'll check against the global harness from the test fixture.
         var publishedEventsCount = await _harness.Published.SelectAsync<MoneyWithdrawn>().Count();
-        Assert.Equal(successfulTransactions, publishedEventsCount);
+        Assert.Equal(expectedSuccessfulTransactionsCount, publishedEventsCount);
     }
 }

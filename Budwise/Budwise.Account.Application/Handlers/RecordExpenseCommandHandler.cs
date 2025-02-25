@@ -10,16 +10,11 @@ using Polly.Retry;
 
 namespace Budwise.Account.Application.Handlers;
 
-public class RecordExpenseCommandHandler(AccountDbContext context, AccountEventsPublisher publisher)
+public class RecordExpenseCommandHandler(IDbContextFactory<AccountDbContext> contextFactory, AccountEventsPublisher publisher)
 {
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<DbUpdateConcurrencyException>()
-        .WaitAndRetryAsync(new[]
-        {
-            TimeSpan.FromSeconds(1),
-            TimeSpan.FromSeconds(2),
-            TimeSpan.FromSeconds(3)
-        });
+        .RetryAsync(3);
     
     public async Task<Result> Handle(RecordExpenseCommand command)
     {
@@ -32,24 +27,11 @@ public class RecordExpenseCommandHandler(AccountDbContext context, AccountEvents
     
     private async Task<Result> ProcessWithdrawal(RecordExpenseCommand command)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
         var account = await context.AssetAccounts.FirstOrDefaultAsync(a => a.AccountId == command.AccountId);
         
         return await Result.FailureIf(account is null, ErrorMessage.FromCode(ErrorCode.AccountNotFound))
             .Bind(() => account!.Withdraw(command.Amount, command.Note))
-            .Tap(async () => await Save());
-    }
-
-    private async Task<Result> Save()
-    {
-        try
-        {
-            await context.SaveChangesAsync();
-            return Result.Success();
-        }
-        catch (DbUpdateConcurrencyException e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
+            .Tap(async () => await context.SaveChangesAsync());
     }
 }
