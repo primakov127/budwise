@@ -22,6 +22,7 @@ public class TestFixture : IAsyncLifetime
         services.AddMassTransitTestHarness();
         services.AddScoped<AccountEventsPublisher>();
         services.AddScoped<RecordExpenseCommandHandler>();
+        services.AddScoped<RecordIncomeCommandHandler>();
 
         ServiceProvider = services.BuildServiceProvider();
     }

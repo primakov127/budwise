@@ -14,7 +14,10 @@ public class RecordExpenseCommandHandler(IDbContextFactory<AccountDbContext> con
 {
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<DbUpdateConcurrencyException>()
-        .RetryAsync(3);
+        .WaitAndRetryAsync(
+            retryCount: 5,
+            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(0.5 * Math.Pow(2, retryAttempt - 1))
+        );
 
     public Task<Result> Handle(RecordExpenseCommand command) => RetryPolicy
         .ExecuteAsync(async () => await ProcessWithdrawal(command))
@@ -26,7 +29,7 @@ public class RecordExpenseCommandHandler(IDbContextFactory<AccountDbContext> con
     {
         await using var context = await contextFactory.CreateDbContextAsync();
         var account = await context.AssetAccounts.FirstOrDefaultAsync(a => a.AccountId == command.AccountId);
-        
+
         return await Result.FailureIf(account is null, ErrorMessage.FromCode(ErrorCode.AccountNotFound))
             .Bind(() => account!.Withdraw(command.Amount, command.Note))
             .Tap(async () => await context.SaveChangesAsync());

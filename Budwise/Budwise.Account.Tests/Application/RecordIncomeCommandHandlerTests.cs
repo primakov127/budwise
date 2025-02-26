@@ -12,27 +12,25 @@ using Xunit;
 
 namespace Budwise.Account.Tests.Application;
 
-public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixture<TestFixture>
+public class RecordIncomeCommandHandlerTests(TestFixture fixture) : IClassFixture<TestFixture>
 {
     [Fact]
-    public async Task Handle_ShouldWithdrawAmount_WhenAccountExists()
+    public async Task Handle_ShouldDepositAmount_WhenAccountExists()
     {
         // Arrange
         using var scope = fixture.ServiceProvider.CreateScope();
         var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AccountDbContext>>();
-        var handler = scope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
+        var handler = scope.ServiceProvider.GetRequiredService<RecordIncomeCommandHandler>();
         var harness = scope.ServiceProvider.GetRequiredService<ITestHarness>();
 
-        const decimal initialDeposit = 100m;
-        const decimal expenseAmount = 50m;
+        const decimal incomeAmount = 50m;
         var accountId = Guid.NewGuid();
         var ownerIds = new List<Guid> { Guid.NewGuid() };
-        var command = new RecordExpenseCommand(accountId, expenseAmount, "Test expense");
+        var command = new RecordIncomeCommand(accountId, incomeAmount, "Test income");
 
         await using (var writeContext = await dbContextFactory.CreateDbContextAsync())
         {
             var newAccount = new AssetAccount(accountId, ownerIds);
-            newAccount.Deposit(initialDeposit, "Initial deposit");
 
             writeContext.AssetAccounts.Add(newAccount);
 
@@ -52,21 +50,22 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
                 .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
             Assert.NotNull(account);
-            Assert.Equal(initialDeposit - expenseAmount, account.Balance);
-            Assert.Equal(2, account.Transactions.Count);
+            Assert.Equal(incomeAmount, account.Balance);
+            Assert.Single(account.Transactions);
 
-            var creditTransaction = account.Transactions.OrderBy(t => t.Date).Last();
-            Assert.Equal(TransactionType.Credit, creditTransaction.Type);
-            Assert.Equal(expenseAmount, creditTransaction.Amount);
+            var transaction = account.Transactions.FirstOrDefault();
+            Assert.NotNull(transaction);
+            Assert.Equal(TransactionType.Debit, transaction.Type);
+            Assert.Equal(incomeAmount, transaction.Amount);
         }
 
         var publishedEvent = harness.Published
-            .Select<MoneyWithdrawn>()
+            .Select<MoneyDeposited>()
             .FirstOrDefault(e => e.Context.Message.AccountId == accountId)?
             .Context.Message;
 
         Assert.NotNull(publishedEvent);
-        Assert.Equal(expenseAmount, publishedEvent.Amount);
+        Assert.Equal(incomeAmount, publishedEvent.Amount);
     }
 
     [Fact]
@@ -74,12 +73,12 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
     {
         // Arrange
         using var scope = fixture.ServiceProvider.CreateScope();
-        var handler = scope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
+        var handler = scope.ServiceProvider.GetRequiredService<RecordIncomeCommandHandler>();
         var harness = scope.ServiceProvider.GetRequiredService<ITestHarness>();
 
-        const decimal expenseAmount = 50m;
+        const decimal incomeAmount = 50m;
         var accountId = Guid.NewGuid();
-        var command = new RecordExpenseCommand(accountId, expenseAmount, "Test expense");
+        var command = new RecordIncomeCommand(accountId, incomeAmount, "Test income");
 
         // Act
         var result = await handler.Handle(command);
@@ -89,60 +88,7 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
         Assert.Equal(ErrorMessage.FromCode(ErrorCode.AccountNotFound), result.Error);
 
         var publishedEvent = harness.Published
-            .Select<MoneyWithdrawn>()
-            .FirstOrDefault(e => e.Context.Message.AccountId == accountId)?
-            .Context.Message;
-
-        Assert.Null(publishedEvent);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldReturnFailure_WhenInsufficientFunds()
-    {
-        // Arrange
-        using var scope = fixture.ServiceProvider.CreateScope();
-        var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AccountDbContext>>();
-        var handler = scope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
-        var harness = scope.ServiceProvider.GetRequiredService<ITestHarness>();
-
-        const decimal initialDeposit = 100m;
-        const decimal expenseAmount = 150m;
-        var accountId = Guid.NewGuid();
-        var ownerIds = new List<Guid> { Guid.NewGuid() };
-        var command = new RecordExpenseCommand(accountId, expenseAmount, "Test expense");
-
-        await using (var writeContext = await dbContextFactory.CreateDbContextAsync())
-        {
-            var newAccount = new AssetAccount(accountId, ownerIds);
-            newAccount.Deposit(initialDeposit, "Initial deposit");
-
-            writeContext.AssetAccounts.Add(newAccount);
-
-            await writeContext.SaveChangesAsync();
-        }
-
-        // Act
-        var result = await handler.Handle(command);
-
-        // Assert
-        Assert.True(result.IsFailure);
-        Assert.Equal(ErrorMessage.FromCode(ErrorCode.InsufficientFunds), result.Error);
-
-        await using (var readContext = await dbContextFactory.CreateDbContextAsync())
-        {
-            var account = await readContext.AssetAccounts
-                .Include(a => a.Transactions)
-                .FirstOrDefaultAsync(a => a.AccountId == accountId);
-
-            Assert.NotNull(account);
-            // The balance remains unchanged due to insufficient funds.
-            Assert.Equal(initialDeposit, account.Balance);
-            // Only the initial deposit transaction should exist.
-            Assert.Single(account.Transactions);
-        }
-
-        var publishedEvent = harness.Published
-            .Select<MoneyWithdrawn>()
+            .Select<MoneyDeposited>()
             .FirstOrDefault(e => e.Context.Message.AccountId == accountId)?
             .Context.Message;
 
@@ -152,23 +98,21 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
     [Theory]
     [InlineData(0)]
     [InlineData(-50)]
-    public async Task Handle_ShouldReturnFailure_WhenInvalidAmount(decimal invalidExpenseAmount)
+    public async Task Handle_ShouldReturnFailure_WhenInvalidAmount(decimal invalidIncomeAmount)
     {
         // Arrange
         using var scope = fixture.ServiceProvider.CreateScope();
         var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AccountDbContext>>();
-        var handler = scope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
+        var handler = scope.ServiceProvider.GetRequiredService<RecordIncomeCommandHandler>();
         var harness = scope.ServiceProvider.GetRequiredService<ITestHarness>();
 
-        const decimal initialDeposit = 100m;
         var accountId = Guid.NewGuid();
         var ownerIds = new List<Guid> { Guid.NewGuid() };
-        var command = new RecordExpenseCommand(accountId, invalidExpenseAmount, "Test expense");
+        var command = new RecordIncomeCommand(accountId, invalidIncomeAmount, "Test income");
 
         await using (var writeContext = await dbContextFactory.CreateDbContextAsync())
         {
             var newAccount = new AssetAccount(accountId, ownerIds);
-            newAccount.Deposit(initialDeposit, "Initial deposit");
 
             writeContext.AssetAccounts.Add(newAccount);
 
@@ -187,16 +131,15 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
             var account = await readContext.AssetAccounts
                 .Include(a => a.Transactions)
                 .FirstOrDefaultAsync(a => a.AccountId == accountId);
-
             Assert.NotNull(account);
-            // The balance remains unchanged since the expense amount is invalid.
-            Assert.Equal(initialDeposit, account.Balance);
-            // Only the initial deposit transaction should exist.
-            Assert.Single(account.Transactions);
+            // Balance remains unchanged.
+            Assert.Equal(0, account.Balance);
+            // No deposit transaction should be recorded.
+            Assert.Empty(account.Transactions);
         }
 
         var publishedEvent = harness.Published
-            .Select<MoneyWithdrawn>()
+            .Select<MoneyDeposited>()
             .FirstOrDefault(e => e.Context.Message.AccountId == accountId)?
             .Context.Message;
 
@@ -204,31 +147,29 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
     }
 
     [Fact]
-    public async Task Handle_ShouldWithdrawMultipleExpenses_WhenCalledMultipleTimes()
+    public async Task Handle_ShouldDepositMultipleIncomes_WhenCalledMultipleTimes()
     {
         // Arrange
         using var scope = fixture.ServiceProvider.CreateScope();
         var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AccountDbContext>>();
-        var handler = scope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
+        var handler = scope.ServiceProvider.GetRequiredService<RecordIncomeCommandHandler>();
         var harness = scope.ServiceProvider.GetRequiredService<ITestHarness>();
 
-        const decimal initialDeposit = 200m;
-        decimal[] expenseAmounts = [50m, 30m];
+        decimal[] incomeAmounts = [50m, 30m];
         var accountId = Guid.NewGuid();
         var ownerIds = new List<Guid> { Guid.NewGuid() };
 
         await using (var writeContext = await dbContextFactory.CreateDbContextAsync())
         {
             var newAccount = new AssetAccount(accountId, ownerIds);
-            newAccount.Deposit(initialDeposit, "Initial deposit");
 
             writeContext.AssetAccounts.Add(newAccount);
 
             await writeContext.SaveChangesAsync();
         }
 
-        var commands = expenseAmounts.Select((amount, index) =>
-            new RecordExpenseCommand(accountId, amount, $"Expense {index + 1}"));
+        var commands = incomeAmounts.Select((amount, index) =>
+            new RecordIncomeCommand(accountId, amount, $"Income {index + 1}"));
 
         // Act
         foreach (var command in commands)
@@ -246,17 +187,17 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
                 .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
             Assert.NotNull(account);
-            // The expected balance after both withdrawals is the initial deposit minus the sum of the expenses.
-            Assert.Equal(initialDeposit - expenseAmounts.Sum(), account.Balance);
+            Assert.Equal(incomeAmounts.Sum(), account.Balance);
+            Assert.Equal(incomeAmounts.Length, account.Transactions.Count);
         }
 
         var publishedEvents = harness.Published
-            .Select<MoneyWithdrawn>()
+            .Select<MoneyDeposited>()
             .Where(e => e.Context.Message.AccountId == accountId)
             .Select(e => e.Context.Message)
             .ToArray();
 
-        Assert.Equal(2, publishedEvents.Length);
+        Assert.Equal(incomeAmounts.Length, publishedEvents.Length);
         Assert.Contains(publishedEvents, msg => msg.Amount == 50m);
         Assert.Contains(publishedEvents, msg => msg.Amount == 30m);
     }
@@ -269,16 +210,14 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
         var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AccountDbContext>>();
         var harness = scope.ServiceProvider.GetRequiredService<ITestHarness>();
 
-        const decimal initialDeposit = 100m;
-        const decimal expenseAmount = 30m;
-        const int numConcurrentTransactions = 5; // If all succeed, total withdrawal would be 150, exceeding the deposit.
+        const decimal incomeAmount = 30m;
+        const int numConcurrentTransactions = 5;
         var accountId = Guid.NewGuid();
         var ownerIds = new List<Guid> { Guid.NewGuid() };
 
         await using (var writeContext = await dbContextFactory.CreateDbContextAsync())
         {
             var newAccount = new AssetAccount(accountId, ownerIds);
-            newAccount.Deposit(initialDeposit, "Initial deposit");
 
             writeContext.AssetAccounts.Add(newAccount);
 
@@ -286,30 +225,21 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
         }
 
         // Act
-        // Simulate concurrent expense transactions by creating a new scope per task.
+        // Simulate concurrent income transactions by creating a new scope per task.
         var tasks = Enumerable.Range(0, numConcurrentTransactions)
             .Select(i => Task.Run(async () =>
             {
                 using var innerScope = fixture.ServiceProvider.CreateScope();
-                var handler = innerScope.ServiceProvider.GetRequiredService<RecordExpenseCommandHandler>();
+                var handler = innerScope.ServiceProvider.GetRequiredService<RecordIncomeCommandHandler>();
 
                 return await handler.Handle(
-                    new RecordExpenseCommand(accountId, expenseAmount, $"Simultaneous expense {i + 1}"));
+                    new RecordIncomeCommand(accountId, incomeAmount, $"Simultaneous income {i + 1}"));
             }));
 
         var results = await Task.WhenAll(tasks);
 
-        // We expect only 3 expenses to succeed (3 * 30 = 90) since the deposit is 100.
-        const int expectedSuccessfulTransactionsCount = 3;
-
-        // Assert
-        var successfulTransactions = results.Where(r => r.IsSuccess).ToArray();
-        Assert.Equal(expectedSuccessfulTransactionsCount, successfulTransactions.Length);
-
-        var failedTransactions = results.Where(r => r.IsFailure).ToArray();
-        Assert.Equal(numConcurrentTransactions - expectedSuccessfulTransactionsCount, failedTransactions.Length);
-        Assert.All(failedTransactions, result =>
-            Assert.Equal(ErrorMessage.FromCode(ErrorCode.InsufficientFunds), result.Error));
+        // All transactions should succeed.
+        Assert.All(results, result => Assert.True(result.IsSuccess));
 
         await using (var readContext = await dbContextFactory.CreateDbContextAsync())
         {
@@ -319,20 +249,18 @@ public class RecordExpenseCommandHandlerTests(TestFixture fixture) : IClassFixtu
 
             Assert.NotNull(account);
 
-            const decimal expectedBalance = initialDeposit - (expectedSuccessfulTransactionsCount * expenseAmount);
+            const decimal expectedBalance = numConcurrentTransactions * incomeAmount;
             Assert.Equal(expectedBalance, account.Balance);
-
-            // There is one deposit plus one transaction for each successful expense.
-            Assert.Equal(1 + expectedSuccessfulTransactionsCount, account.Transactions.Count);
+            Assert.Equal(numConcurrentTransactions, account.Transactions.Count);
         }
 
         var publishedEvents = harness.Published
-            .Select<MoneyWithdrawn>()
+            .Select<MoneyDeposited>()
             .Where(e => e.Context.Message.AccountId == accountId)
             .Select(e => e.Context.Message)
             .ToArray();
 
-        Assert.Equal(expectedSuccessfulTransactionsCount, publishedEvents.Length);
-        Assert.All(publishedEvents, msg => Assert.Equal(expenseAmount, msg.Amount));
+        Assert.Equal(numConcurrentTransactions, publishedEvents.Length);
+        Assert.All(publishedEvents, msg => Assert.Equal(incomeAmount, msg.Amount));
     }
 }
